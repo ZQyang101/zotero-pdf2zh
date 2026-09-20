@@ -65,6 +65,7 @@ def build_codex_command(
     args = [
         "exec",
         "--ephemeral",
+        "--ignore-user-config",
         "--skip-git-repo-check",
         "--sandbox",
         "read-only",
@@ -127,6 +128,7 @@ def main() -> int:
         inner_args = [
             "exec",
             "--ephemeral",
+            "--ignore-user-config",
             "--skip-git-repo-check",
             "--sandbox",
             "read-only",
