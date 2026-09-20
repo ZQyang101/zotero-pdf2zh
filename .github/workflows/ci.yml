@@ -464,8 +464,33 @@ jobs:
                   unzip -l plugin/build/zotero-pdf-2-zh.xpi | grep -q 'locale/en-US/pdf2zh-addon.ftl'
                   unzip -l plugin/build/zotero-pdf-2-zh.xpi | grep -q 'locale/zh-CN/pdf2zh-addon.ftl'
 
+            - name: Build Codex server bundle
+              run: |
+                  rm -f server-codex.zip
+                  zip -r server-codex.zip server \
+                    -x 'server/translated/*' \
+                    -x 'server/zotero-pdf2zh-venv/*' \
+                    -x 'server/zotero-pdf2zh-next-venv/*' \
+                    -x 'server/zotero-pdf2zh-venv.staging/*' \
+                    -x 'server/zotero-pdf2zh-next-venv.staging/*' \
+                    -x 'server/zotero-pdf2zh-venv.backup/*' \
+                    -x 'server/zotero-pdf2zh-next-venv.backup/*' \
+                    -x 'server/config/config.json' \
+                    -x 'server/config/config.toml' \
+                    -x 'server/config/venv.json' \
+                    -x 'server/config/package_update_state.json' \
+                    -x 'server/config/*.invalid.bak' \
+                    -x 'server/config/*.invalid.*.bak' \
+                    -x 'server/__pycache__/*' \
+                    -x 'server/*/__pycache__/*' \
+                    -x 'server/**/*.pyc' \
+                    -x '.DS_Store'
+                  unzip -l server-codex.zip | grep -q 'server/utils/codex_cli_bridge.py'
+
             - name: Upload build result
               uses: actions/upload-artifact@v4
               with:
                   name: build-result
-                  path: plugin/build
+                  path: |
+                      plugin/build
+                      server-codex.zip
