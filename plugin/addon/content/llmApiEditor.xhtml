@@ -243,7 +243,32 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                 </div>
             </div>
 
-            <div class="form-group">
+            <div
+                class="form-group"
+                id="codex-reasoning-group"
+                style="display: none"
+            >
+                <label id="label-codex-reasoning">推理强度</label>
+                <select
+                    id="codex-reasoning"
+                    style="
+                        width: 100%;
+                        padding: 10px 12px;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                        background-color: #fff;
+                    "
+                >
+                    <option value="">默认（由 Codex / 模型决定）</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">Extra High (xhigh)</option>
+                    <option value="max">Max</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="api-key-group">
                 <label id="label-api-key">LLM API KEY</label>
                 <div class="input-group">
                     <input
@@ -268,7 +293,7 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                 </div>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="base-url-group">
                 <label id="label-base-url">LLM BASE URL</label>
                 <div class="input-group">
                     <input
@@ -523,6 +548,19 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                     models: ["sonnet"],
                     urls: ["claude"],
                 },
+                codex: {
+                    name: "Codex CLI",
+                    models: [
+                        "gpt-6-astra",
+                        "gpt-5.6-sol",
+                        "gpt-5.6-terra",
+                        "gpt-5.6-luna",
+                        "gpt-5.3-codex-spark",
+                    ],
+                    urls: ["codex"],
+                    modelListUrl:
+                        "https://developers.openai.com/zh-Hans/docs/models",
+                },
             };
 
             let mergedServices = {};
@@ -558,6 +596,7 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                 "high",
             ];
             const PDF2ZH_NEXT_EXTRA_FIELDS = {
+                codex: [],
                 openai: [
                     {
                         key: "openai_timeout",
@@ -791,6 +830,11 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                     apiKey: "LLM API KEY",
                     deleteApiKey: "删除 API Key 记录",
                     baseUrl: "LLM BASE URL",
+                    codexCliPath: "Codex CLI 路径",
+                    codexCliPathPlaceholder: "codex（或 codex.cmd / 完整路径）",
+                    codexReasoning: "推理强度",
+                    codexReasoningDefault: "默认（由 Codex / 模型决定）",
+                    codexLocalAuth: "Codex CLI 使用本机 ChatGPT 登录状态，无需 API Key。",
                     deleteCustomUrl: "删除自定义 URL",
                     activate: "激活此配置 (相同服务类型的其他配置将被自动停用)",
                     extraParams: "额外参数",
@@ -834,6 +878,12 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                     apiKey: "LLM API KEY",
                     deleteApiKey: "Delete API Key history",
                     baseUrl: "LLM BASE URL",
+                    codexCliPath: "Codex CLI path",
+                    codexCliPathPlaceholder: "codex (or codex.cmd / full path)",
+                    codexReasoning: "Reasoning effort",
+                    codexReasoningDefault: "Default (Codex/model default)",
+                    codexLocalAuth:
+                        "Codex CLI uses the local ChatGPT login state; no API key is required.",
                     deleteCustomUrl: "Delete custom URL",
                     activate:
                         "Activate this configuration (other configurations of the same service will be disabled)",
@@ -1457,6 +1507,47 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                 refreshExtraFieldSuggestions();
             }
 
+            function updateCodexUi(serviceKey) {
+                const isCodex = serviceKey === "codex";
+                const keyGroup = document.getElementById("api-key-group");
+                const reasoningGroup = document.getElementById(
+                    "codex-reasoning-group",
+                );
+                const baseLabel = document.getElementById("label-base-url");
+                const baseInput = document.getElementById("apiUrl");
+                const modelInput = document.getElementById("model");
+
+                if (keyGroup) keyGroup.style.display = isCodex ? "none" : "";
+                if (reasoningGroup)
+                    reasoningGroup.style.display = isCodex ? "" : "none";
+
+                if (baseLabel)
+                    baseLabel.textContent = isCodex
+                        ? t("codexCliPath")
+                        : t("baseUrl");
+                if (baseInput)
+                    baseInput.placeholder = isCodex
+                        ? t("codexCliPathPlaceholder")
+                        : "https://...";
+                if (modelInput && isCodex) {
+                    modelInput.placeholder =
+                        "gpt-5.6-sol / gpt-5.6-terra / gpt-5.6-luna";
+                } else if (modelInput) {
+                    modelInput.placeholder = t("modelPlaceholder");
+                }
+
+                const reasoning = document.getElementById("codex-reasoning");
+                const reasoningLabel = document.getElementById(
+                    "label-codex-reasoning",
+                );
+                if (reasoningLabel)
+                    reasoningLabel.textContent = t("codexReasoning");
+                if (reasoning && reasoning.options.length) {
+                    reasoning.options[0].textContent =
+                        t("codexReasoningDefault");
+                }
+            }
+
             function updateDocLink(serviceKey) {
                 const linkEl = document.getElementById("service-doc-link");
                 const serviceConfig = DEFAULT_SERVICES[serviceKey];
@@ -1638,6 +1729,7 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                     document.getElementById("apiKey").value,
                 );
                 updateDocLink(currentService);
+                updateCodexUi(currentService);
 
                 document.getElementById("activate").checked =
                     currentData.activate !== undefined
@@ -1645,8 +1737,17 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                         : true;
 
                 if (currentData.extraData) {
-                    for (const key in currentData.extraData)
+                    for (const key in currentData.extraData) {
+                        if (
+                            key === "codex_reasoning_effort" &&
+                            currentService === "codex"
+                        ) {
+                            document.getElementById("codex-reasoning").value =
+                                currentData.extraData[key] || "";
+                            continue;
+                        }
                         addExtraFieldRow(key, currentData.extraData[key]);
+                    }
                 }
                 syncDeepSeekThinkingFields(currentService);
                 refreshExtraFieldSuggestions();
@@ -1730,6 +1831,7 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                         document.getElementById("apiKey").value,
                     );
                     updateDocLink(val);
+                    updateCodexUi(val);
                     syncDeepSeekThinkingFields(val);
                     checkAllDeleteButtons();
                 });
@@ -1816,6 +1918,18 @@ href="chrome://zotero/skin/zotero.css" type="text/css"?>
                 if (s === "deepseek" && DEPRECATED_DEEPSEEK_MODELS.has(m)) {
                     alert(t("deprecatedDeepSeekModel"));
                     return;
+                }
+
+                if (s === "codex") {
+                    const codexReasoning = document.getElementById(
+                        "codex-reasoning",
+                    ).value;
+                    if (codexReasoning) {
+                        extraDataObject.codex_reasoning_effort =
+                            codexReasoning;
+                    } else {
+                        delete extraDataObject.codex_reasoning_effort;
+                    }
                 }
 
                 if (s === "deepseek") {
