@@ -107,6 +107,9 @@ pdf2zh_next_service_aliases = {
     "qwen-mt": "qwenmt",
     "AliyunDashScope": "aliyundashscope",
     "azure-openai": "azureopenai",
+    # Codex is exposed by the Zotero plugin but implemented by pdf2zh_next's
+    # generic CLITranslator so it can reuse the user's local ChatGPT/Codex login.
+    "codex": "clitranslator",
 }
 
 pdf2zh_next_config_map = {
