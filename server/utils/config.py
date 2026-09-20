@@ -3,6 +3,9 @@
 # zotero-pdf2zh
 import json, toml
 import os
+import shlex
+import sys
+from pathlib import Path
 
 from utils.config_map import (
     pdf2zh_config_map,
@@ -284,6 +287,78 @@ class Config:
                 print(f"✏️ 更新 config file: {config_file}")
             
         elif engine == pdf2zh_next: # toml文件, 格式参考server/config/config.toml.example
+            # Codex CLI is a plugin-level convenience service implemented through
+            # pdf2zh_next's generic CLITranslator. Build the command here so the
+            # Zotero UI can expose model / reasoning choices without requiring an
+            # OpenAI API key. Authentication stays entirely in the local Codex CLI.
+            if service == 'codex':
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    old_config = toml.load(f)
+
+                new_config = old_config.copy()
+                translation_config = new_config.setdefault('translation', {})
+                pdf_config = new_config.setdefault('pdf', {})
+
+                # Multiple simultaneous Codex sessions are expensive and can burn
+                # through a ChatGPT allowance quickly. Keep the first integration
+                # deliberately serial; this can be relaxed later if needed.
+                self.qps = 1
+                self.pool_size = 1
+                translation_config['pool_max_workers'] = 1
+                pdf_config['only_include_translated_page'] = self.only_include_translated_page
+
+                model = str(self.llm_api.get('model') or '').strip()
+                codex_path = str(self.llm_api.get('apiUrl') or 'codex').strip() or 'codex'
+                extra_data = self.llm_api.get('extraData') or {}
+                reasoning_effort = str(extra_data.get('codex_reasoning_effort') or '').strip()
+
+                allowed_efforts = {'low', 'medium', 'high', 'xhigh', 'max'}
+                if reasoning_effort and reasoning_effort not in allowed_efforts:
+                    raise ValueError(
+                        'Unsupported Codex reasoning effort: '
+                        f'{reasoning_effort}. Expected one of {sorted(allowed_efforts)}.'
+                    )
+
+                bridge_path = Path(__file__).with_name('codex_cli_bridge.py').resolve()
+                command = [
+                    sys.executable,
+                    str(bridge_path),
+                    '--codex-path',
+                    codex_path,
+                    '--source-lang',
+                    str(self.sourceLang),
+                    '--target-lang',
+                    str(self.targetLang),
+                ]
+                if model:
+                    command.extend(['--model', model])
+                if reasoning_effort:
+                    command.extend(['--reasoning-effort', reasoning_effort])
+
+                detail = new_config.setdefault('clitranslator_detail', {})
+                detail.clear()
+                detail.update(
+                    {
+                        'translate_engine_type': 'CLITranslator',
+                        'support_llm': 'no',
+                        'clitranslator_command': shlex.join(command),
+                        # A single Codex call can take longer than a normal API
+                        # request, especially at high/xhigh/max reasoning.
+                        'clitranslator_timeout': 300,
+                        'clitranslator_postprocess_command': 'null',
+                    }
+                )
+
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    toml.dump(new_config, f)
+                print(
+                    '✏️ 已配置 Codex CLITranslator: '
+                    f'model={model or "default"}, '
+                    f'reasoning={reasoning_effort or "default"}, '
+                    f'path={codex_path}'
+                )
+                return
+
             service = resolve_pdf2zh_next_service(service)
             config_map = pdf2zh_next_config_map.get(service, {})
             if not config_map:
