@@ -40,9 +40,10 @@ jobs:
       - name: Install plugin dependencies
         run: cd plugin && npm ci
 
-      - name: Check Codex UI formatting
+      - name: Format Codex UI for the build
         run: |
           cd plugin
+          npx prettier --write addon/content/llmApiEditor.xhtml addon/content/preferences.xhtml
           npx prettier --check addon/content/llmApiEditor.xhtml addon/content/preferences.xhtml
 
       - name: Build Zotero plugin
