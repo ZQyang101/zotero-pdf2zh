@@ -1,0 +1,73 @@
+name: Codex CLI CI
+
+on:
+  push:
+    branches:
+      - codex-cli
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codex-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test Codex server integration
+        env:
+          PYTHONPATH: server
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install toml
+          python -m compileall -q server/utils/codex_cli_bridge.py server/utils/config.py
+          python -m unittest discover -s server/tests -p 'test_codex_config.py'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plugin/package-lock.json
+
+      - name: Install plugin dependencies
+        run: cd plugin && npm ci
+
+      - name: Check Codex UI formatting
+        run: |
+          cd plugin
+          npx prettier --check addon/content/llmApiEditor.xhtml addon/content/preferences.xhtml
+
+      - name: Build Zotero plugin
+        run: cd plugin && npm run build
+
+      - name: Verify Codex UI is packaged
+        run: |
+          test -f plugin/build/zotero-pdf-2-zh.xpi
+          unzip -p plugin/build/zotero-pdf-2-zh.xpi content/llmApiEditor.xhtml | grep -q 'Codex CLI'
+          unzip -p plugin/build/zotero-pdf-2-zh.xpi content/preferences.xhtml | grep -q 'value="codex"'
+
+      - name: Build Codex server bundle
+        run: |
+          rm -f server-codex.zip
+          zip -r server-codex.zip server             -x 'server/translated/*'             -x 'server/zotero-pdf2zh-venv/*'             -x 'server/zotero-pdf2zh-next-venv/*'             -x 'server/zotero-pdf2zh-venv.staging/*'             -x 'server/zotero-pdf2zh-next-venv.staging/*'             -x 'server/zotero-pdf2zh-venv.backup/*'             -x 'server/zotero-pdf2zh-next-venv.backup/*'             -x 'server/config/config.json'             -x 'server/config/config.toml'             -x 'server/config/venv.json'             -x 'server/config/package_update_state.json'             -x 'server/config/*.invalid.bak'             -x 'server/config/*.invalid.*.bak'             -x 'server/__pycache__/*'             -x 'server/*/__pycache__/*'             -x 'server/**/*.pyc'             -x '.DS_Store'
+          unzip -l server-codex.zip | grep -q 'server/utils/codex_cli_bridge.py'
+
+      - name: Stage distributables
+        run: |
+          mkdir -p codex-build
+          cp plugin/build/zotero-pdf-2-zh.xpi codex-build/zotero-pdf-2-zh-codex.xpi
+          cp server-codex.zip codex-build/server-codex.zip
+
+      - name: Upload Codex build
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-build-result
+          path: codex-build
