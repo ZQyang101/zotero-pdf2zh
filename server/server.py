@@ -1064,9 +1064,12 @@ class PDFTranslator:
         return output_files
 
     def translate_pdf_next(self, input_path, config, task_id=None):
+        # Let Config see the plugin-facing service name first. Codex needs that
+        # information to synthesize the CLITranslator command. Other aliases are
+        # already resolved inside Config.update_config_file().
+        config.update_config_file(config_path[pdf2zh_next])
         if config.service in pdf2zh_next_service_aliases:
             config.service = pdf2zh_next_service_aliases[config.service]
-        config.update_config_file(config_path[pdf2zh_next])
 
         cmd = [
             pdf2zh_next,
